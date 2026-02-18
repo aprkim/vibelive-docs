@@ -1,4 +1,4 @@
-# VibeLive Integration Guide v1.1
+# VibeLive Integration Guide
 
 This document combines the **MiniChat API Guide** (SDK behavior & lifecycle) and the **Design Guide** (visual & interaction rules) into a single reference for building VibeLive-powered apps.
 
@@ -975,7 +975,7 @@ PRE-LIVE → LIVE → PRE-LIVE / EXIT
 
 ---
 
-## Core Design Philosophy (from v2.0)
+## Core Design Philosophy
 
 1. **Good defaults beat configuration** — if the user does nothing, the UI should still feel right.
 2. **Visual fairness** — participants are equal unless explicitly designed otherwise.
