@@ -1,23 +1,31 @@
 # VibeLive Integration Guide
 
-This document combines the **MiniChat API Guide** (SDK behavior & lifecycle) and the **Design Guide** (visual & interaction rules) into a single reference for building VibeLive-powered apps.
+**Combined reference — MiniChat API Guide v0.63 + Design Guide v2.1**
 
-**Structure:**
-- Part 1: MiniChat API Guide (behavior, events, SDK usage)
-- Part 2: Design Guide (visual rules, layout, interaction)
-
-**Authority Rule:** When these two parts conflict:
-- **Part 1 (API Guide)** defines system behavior and lifecycle semantics
-- **Part 2 (Design Guide)** defines visual presentation and interaction rules
+Last updated: 2026-02-18
 
 ---
+
+## Authority Rule
+
+When the API Guide and Design Guide conflict:
+
+- **API Guide (Part 1)** defines system behavior and lifecycle semantics
+- **Design Guide (Part 2)** defines visual presentation and interaction rules
+
+For visual conflicts, the Design Guide wins. See [CONFLICTS.md](CONFLICTS.md) for the full list of known conflicts and their resolutions.
+
 ---
 
-# Part 1: MiniChat API Guide
+---
+
+# Part 1 — MiniChat API Guide
 
 **Build an anonymous video chat app with MiniChat**
 
-Version 0.61 | February 18, 2026
+Version 0.63 | February 18, 2026
+
+> **Note:** Code examples in this section have been updated to comply with the Design Guide's visual rules (inline SVG icons instead of emoji, "Your Screen" label for local screenshare, LIVE badge on screenshare tiles). See [CONFLICTS.md](CONFLICTS.md) for details.
 
 ---
 
@@ -110,11 +118,11 @@ PRE-LIVE    →    LIVE    →    PRE-LIVE or EXIT
 | **PRE-LIVE** | WebRTC disconnected, still in channel | `stopLive()` |
 | **EXIT** | Fully departed, camera released | `exitRoom()` |
 
-- `startLive()` → Connect WebRTC, go LIVE
-- `stopLive()` → Disconnect WebRTC, return to PRE-LIVE (quick rejoin possible)
-- `exitRoom()` → Full teardown, release camera/mic, stay logged in (can enter a different room)
-- `backToList()` → Like `exitRoom()` but intended for multi-room flows: stops media and clears the channel, returning the user to a room-selection state without logging out
-- `logout()` → Full session teardown including authentication
+- `startLive()` — Connect WebRTC, go LIVE
+- `stopLive()` — Disconnect WebRTC, return to PRE-LIVE (quick rejoin possible)
+- `exitRoom()` — Full teardown, release camera/mic, stay logged in (can enter a different room)
+- `backToList()` — Like `exitRoom()` but intended for multi-room flows: stops media and clears the channel, returning the user to a room-selection state without logging out
+- `logout()` — Full session teardown including authentication
 
 ---
 
@@ -249,9 +257,9 @@ function createVideoTile(memberId, name, streamType, isLocal) {
     const placeholder = document.createElement('div');
     placeholder.className = 'video-placeholder';
     if (streamType === 'camera') {
-        placeholder.innerHTML = `<span>${isLocal ? 'You' : name}</span>`;
+        placeholder.innerHTML = `<span>${isLocal ? `${name} (You)` : name}</span>`;
     } else {
-        placeholder.innerHTML = `<span>🖥️ ${isLocal ? 'Your' : name + "'s"} Screen</span>`;
+        placeholder.innerHTML = `<span>${isLocal ? 'Your' : name + "'s"} Screen</span>`;
     }
 
     const video = document.createElement('video');
@@ -267,22 +275,29 @@ function createVideoTile(memberId, name, streamType, isLocal) {
     memberInfo.className = 'member-info';
     if (streamType === 'camera') {
         memberInfo.innerHTML = `
-            <span class="member-name">${isLocal ? 'You' : name}</span>
+            <span class="member-name">${isLocal ? `${name} (You)` : name}</span>
             <div class="member-indicators">
                 <span class="status-badge"></span>
-                <span class="indicator cam-video" title="Camera">📹</span>
-                <span class="indicator cam-audio" title="Microphone">🎤</span>
+                <span class="indicator cam-video" title="Camera"><!-- SVG icon --></span>
+                <span class="indicator cam-audio" title="Microphone"><!-- SVG icon --></span>
             </div>
         `;
     } else {
         memberInfo.innerHTML = `
-            <span class="member-name">🖥️ ${isLocal ? 'Your' : name + "'s"} Screen</span>
+            <span class="member-name">${isLocal ? 'Your' : name + "'s"} Screen</span>
+            <div class="member-indicators">
+                <span class="status-badge">LIVE</span>
+            </div>
         `;
     }
 
     tile.appendChild(videoContainer);
     tile.appendChild(memberInfo);
-    document.getElementById('videoGrid').appendChild(tile);
+    // Route screenshare tiles to a separate container if one exists
+    const targetGrid = streamType === 'screenshare'
+        ? (document.getElementById('screenshareGrid') || document.getElementById('videoGrid'))
+        : document.getElementById('videoGrid');
+    targetGrid.appendChild(tile);
 
     // Register local elements immediately (Element-First Rule)
     if (isLocal) {
@@ -301,6 +316,10 @@ function createVideoTile(memberId, name, streamType, isLocal) {
 - CSS example: `.video-tile[data-stream-type="screenshare"] { grid-column: span 2; }`
 - `playsInline` is required for iOS
 - `muted = true` on local video prevents audio feedback
+- **Screenshare placement:** `createVideoTile()` routes screenshare tiles to `#screenshareGrid` if it exists, falling back to `#videoGrid`. Add `<div id="screenshareGrid"></div>` above `videoGrid` in your HTML to place screenshare tiles in a separate area — no code changes needed.
+- **Icons:** Use inline SVG icons for camera and microphone indicators — no emoji (see Design Guide §Core Design Philosophy and §Media Indicators)
+- **Screenshare labels:** Local user sees "Your Screen"; remote users see "Name's Screen" (see Design Guide §Screen Share Tile Semantics)
+- **Screenshare LIVE badge:** Screenshare tiles include a LIVE badge matching the styling of camera tiles (see Design Guide §Screen Share Tile Semantics)
 
 ---
 
@@ -520,7 +539,7 @@ MiniChat.on('remoteLeft', (memberId) => {
         document.getElementById(`tile-${memberId}-camera`)?.remove();
         document.getElementById(`tile-${memberId}-screenshare`)?.remove();
     }
-    // If PRE-LIVE, keep tiles — they stopped streaming but haven't left
+    // If PRE-LIVE, keep tiles — they may rejoin
 });
 ```
 
@@ -772,12 +791,16 @@ A working app in under 50 lines of JavaScript:
 
             tile.innerHTML = `
                 <div class="video-placeholder"><span>${streamType === 'camera'
-                    ? (isLocal ? 'You' : name)
-                    : '🖥️ ' + (isLocal ? 'Your' : name + "'s") + ' Screen'}</span></div>
+                    ? (isLocal ? `${name} (You)` : name)
+                    : (isLocal ? 'Your' : name + "'s") + ' Screen'}</span></div>
                 <video autoplay playsinline ${isLocal || streamType === 'screenshare' ? 'muted' : ''}></video>
             `;
 
-            document.getElementById('videoGrid').appendChild(tile);
+            // Screenshare tiles go to screenshareGrid if present, otherwise videoGrid
+            const targetGrid = streamType === 'screenshare'
+                ? (document.getElementById('screenshareGrid') || document.getElementById('videoGrid'))
+                : document.getElementById('videoGrid');
+            targetGrid.appendChild(tile);
 
             if (isLocal) {
                 const video = tile.querySelector('video');
@@ -806,8 +829,8 @@ A working app in under 50 lines of JavaScript:
 | `enterByRoomCode(code, displayName?)` | Enter room → PRE-LIVE (displayName optional, updates member name) |
 | `startLive()` | Connect WebRTC → LIVE |
 | `stopLive()` | Disconnect WebRTC → PRE-LIVE |
-| `exitRoom()` | Full teardown, release camera/mic → stay logged in |
-| `backToList()` | Stop media and clear channel → return to room selection without logout |
+| `exitRoom()` | Full teardown, release camera/mic — stay logged in |
+| `backToList()` | Stop media and clear channel — return to room selection without logout |
 | `toggleAudio()` | Start/stop mic hardware |
 | `toggleVideo()` | Start/stop camera hardware |
 | `toggleScreenshare()` | Start/stop screen share |
@@ -922,9 +945,10 @@ A working app in under 50 lines of JavaScript:
 *MiniChat API v1.0 — Facade over MiniChatCore. For advanced use, access `MiniChat.core` for the full MiniChatCore API.*
 
 ---
+
 ---
 
-# Part 2: Design Guide
+# Part 2 — Design Guide
 
 Version: 2.1
 Last updated: 2026-02-18
@@ -939,10 +963,10 @@ This document defines **visual, interaction, and layout rules** for MiniChatCore
 
 When behavior or lifecycle rules conflict:
 
-- **Part 1 (API Guide) defines system behavior and lifecycle semantics**
-- **Part 2 (Design Guide) defines visual presentation and interaction rules**
+- **MINI_GUIDE defines system behavior and lifecycle semantics**
+- **DESIGN_GUIDE defines visual presentation and interaction rules**
 
-Part 2 must not override MiniChatCore lifecycle behavior.
+DESIGN_GUIDE must not override MiniChatCore lifecycle behavior.
 
 ---
 
@@ -975,7 +999,7 @@ PRE-LIVE → LIVE → PRE-LIVE / EXIT
 
 ---
 
-## Core Design Philosophy
+## Core Design Philosophy (from v2.0)
 
 1. **Good defaults beat configuration** — if the user does nothing, the UI should still feel right.
 2. **Visual fairness** — participants are equal unless explicitly designed otherwise.
@@ -1099,7 +1123,7 @@ Use **two separated cards**:
 #### URL Deep Linking (`?code=`)
 
 - Auto-fill room code from URL parameter
-- Triggers dynamic priority swap — "Join" becomes primary
+- Triggers dynamic priority swap → "Join" becomes primary
 
 #### Shareable Invite Link
 
@@ -1135,7 +1159,7 @@ Rules:
 
 Each **camera tile** contains:
 - Video OR initials placeholder
-- Name label (bottom-left) → local user shows **"Name (You)"** (e.g. "April (You)"), remote users show their display name
+- Name label (bottom-left) — local user shows **"Name (You)"** (e.g. "April (You)"), remote users show their display name
 - Camera + mic indicators (**always visible**)
 - **LIVE status badge** — shown on all tiles (local and remote) when the participant is live. Uses `--liveBg` / `--liveText` styling. Badge is hidden when the participant is not live.
 
@@ -1192,7 +1216,7 @@ Indicator visibility must be **immediately obvious** at any tile size:
 
 ### Screen Share Layout Rules
 
-- Each screen share creates a **separate tile** inside a shared `.screenshare-area` container
+- Each screen share creates a **separate tile** inside a shared `#screenshareGrid` container
 - Camera tiles always remain visible in the strip below
 - Screen share tiles divide the available area equally (flexbox `flex: 1`)
 - Each screen share must preserve its native aspect ratio
@@ -1454,10 +1478,10 @@ Accessibility:
 
 ## Summary
 
-- Part 1 (API Guide) controls behavior
-- Part 2 (Design Guide) controls UI
+- MINI_GUIDE controls behavior
+- DESIGN_GUIDE controls UI
 - PRE-LIVE ≠ EXIT
-- Camera tiles persist across LIVE → PRE-LIVE; screenshare tiles removed on stream end
+- Camera tiles persist across LIVE ⇄ PRE-LIVE; screenshare tiles removed on stream end
 - Remote members visible in both LIVE and PRE-LIVE states
 - Screen share tiles show name label and LIVE badge, but no mic/camera indicators
 - Media indicators always visible
@@ -1466,4 +1490,10 @@ Accessibility:
 
 ---
 
-End of VibeLive Integration Guide v1.1
+End of DESIGN_GUIDE_v2.1
+
+---
+
+---
+
+*VibeLive Integration Guide — MiniChat API v0.63 + Design Guide v2.1 | Last updated: 2026-02-18*
