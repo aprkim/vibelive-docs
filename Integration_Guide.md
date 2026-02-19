@@ -1,8 +1,8 @@
 # VibeLive Integration Guide
 
-**Combined reference — MiniChat API Guide v0.63 + Design Guide v2.1**
+**Combined reference — MiniChat API Guide v0.63 + Design Guide v2.2**
 
-Last updated: 2026-02-18
+Last updated: 2026-02-18 11:30 PM PST
 
 ---
 
@@ -14,6 +14,59 @@ When the API Guide and Design Guide conflict:
 - **Design Guide (Part 2)** defines visual presentation and interaction rules
 
 For visual conflicts, the Design Guide wins. See [CONFLICTS.md](CONFLICTS.md) for the full list of known conflicts and their resolutions.
+
+---
+
+## Implementation Checklist
+
+Scannable list of every functional requirement across both guides. Use this to verify completeness.
+
+### Entry Flow
+- [ ] Name input (max 24 chars, autofocus)
+- [ ] "Start a Room" button creates room via `signup()` → `createRoom()` → `enterByRoomCode()`
+- [ ] "Join" button joins room via `signup()` → `enterByRoomCode(code)`
+- [ ] Dynamic button priority: "Start a Room" is primary when no code entered; "Join" becomes primary when code is entered
+- [ ] URL deep linking: auto-fill room code from `?code=` parameter, swap "Join" to primary
+- [ ] Shareable invite link: copy-link produces full URL with `?code=<roomCode>`, not just the raw code
+- [ ] Name validation hint on disabled button click
+- [ ] Button loading states (spinner + "Creating..." for Start; disabled-only for Join)
+
+### Pre-Live Screen
+- [ ] Topbar: app name (left) + room code + copy-code button + copy-link button (right)
+- [ ] Camera preview tile (~70% of available space)
+- [ ] Camera and mic toggle buttons
+- [ ] "Go Live" primary CTA + "Back" secondary button
+- [ ] No remote participants visible
+- [ ] Element-First Rule: both camera and screenshare tiles created and registered here
+
+### Live Screen
+- [ ] Same topbar as pre-live
+- [ ] Video grid with 16:9 tiles, responsive layout (1→2→2×2→3+2)
+- [ ] Separate `#screenshareGrid` above camera tiles
+- [ ] Camera toggle (`toggleVideo()`), mic toggle (`toggleMuteAudio()`), screenshare toggle
+- [ ] Leave button with danger styling, visually separated
+- [ ] Remote tiles created on demand in `remoteStreamStart`
+- [ ] Remote tiles removed only when `displayStatus === 'INACTIVE'`
+
+### Media & Tiles
+- [ ] Local camera tile: video/placeholder visibility toggled in `localMediaChange`
+- [ ] Local screenshare tile: `display` toggled AND video/placeholder visibility toggled in `localMediaChange`
+- [ ] Remote camera tile: video/placeholder toggled in `remoteStreamStart` / `remoteStreamEnd` / `remoteMediaChange`
+- [ ] Remote screenshare tile: created in `remoteStreamStart`, removed entirely in `remoteStreamEnd`
+- [ ] Media indicators (camera + mic) on camera tiles using inline SVG icons
+- [ ] LIVE status badge on active tiles
+- [ ] Initials placeholder when camera is off
+
+### Sharing
+- [ ] Copy-code button: copies raw room code
+- [ ] Copy-link button: copies full URL with `?code=<roomCode>`
+- [ ] "Copied!" tooltip below button for 1.5 seconds (not a global toast)
+
+### Theme
+- [ ] Dark mode default, light mode option
+- [ ] Theme toggle in bottom-right corner (fixed, z-index: 100)
+- [ ] Choice persists via localStorage
+- [ ] Respect `prefers-color-scheme` on first visit
 
 ---
 
@@ -84,6 +137,17 @@ await MiniChat.signup('Jordan');
 await MiniChat.enterByRoomCode('X7kQ3m');
 // Now in PRE-LIVE — call startLive() when ready
 ```
+
+### Sharing a Room
+
+When sharing the room code with others, **always share a full URL** with `?code=<roomCode>`, not the raw code alone. This enables deep linking — recipients land directly in the join flow with the code pre-filled.
+
+```javascript
+// Build a shareable invite link
+const inviteUrl = `${window.location.origin}${window.location.pathname}?code=${room.room_code}`;
+```
+
+See also: Design Guide §[Shareable Invite Link](#shareable-invite-link) and §[URL Deep Linking](#url-deep-linking-code).
 
 ### Change Display Name on Rejoin
 
@@ -762,7 +826,15 @@ A working app in under 50 lines of JavaScript:
                 else { p?.classList.remove('hidden'); v?.classList.remove('visible'); }
             }
             const screenTile = document.getElementById(`tile-${MiniChat.memberId}-screenshare`);
-            if (screenTile) screenTile.style.display = MiniChat.screenState.video ? 'block' : 'none';
+            if (screenTile) {
+                if (MiniChat.screenState.video) {
+                    screenTile.style.display = 'block';
+                    screenTile.querySelector('.video-placeholder')?.classList.add('hidden');
+                    screenTile.querySelector('video')?.classList.add('visible');
+                } else {
+                    screenTile.style.display = 'none';
+                }
+            }
         });
 
         MiniChat.on('remoteLeft', (id) => {
@@ -939,6 +1011,8 @@ A working app in under 50 lines of JavaScript:
        // Handle remote member tiles...
    });
    ```
+
+13. **Not toggling video/placeholder visibility for local screenshare** — In `localMediaChange`, toggling the screenshare tile's `display` is not enough. The `<video>` element inside starts hidden (e.g. `opacity: 0`) and needs its visibility class toggled too, just like camera tiles. Without this, the tile appears but shows the placeholder instead of the screen content. Compare the correct pattern in [Handling Local Media Changes](#handling-local-media-changes).
 
 ---
 
@@ -1490,10 +1564,10 @@ Accessibility:
 
 ---
 
-End of DESIGN_GUIDE_v2.1
+End of DESIGN_GUIDE_v2.2
 
 ---
 
 ---
 
-*VibeLive Integration Guide — MiniChat API v0.63 + Design Guide v2.1 | Last updated: 2026-02-18*
+*VibeLive Integration Guide — MiniChat API v0.63 + Design Guide v2.2 | Last updated: 2026-02-18 11:30 PM PST*
